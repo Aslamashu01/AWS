@@ -1,0 +1,79 @@
+Parameters: 
+  KeyPair: 
+    Description: "The EC2 Key Pair to allow SSH access to the instance"
+    Type: "AWS::EC2::KeyPair::KeyName"
+  ImageId:
+    Description: "The ImageId for EC2 Instance"
+    Type: "String"
+    Default: "ami-0742b4e673072066f"
+  PublicSubnet:
+    Description: "Public Subnet to Launch Instance"
+    Type: "AWS::EC2::Subnet::Id"
+  VpcId:
+    Description: "VpcId for the Security group"
+    Type: AWS::EC2::VPC::Id
+  MyIP:
+    Description: "Allow SSH traffic from this IP. Enter your current external IP in format x.x.x.x/xx"
+    Type: "String"  
+Resources:
+  InstanceSecurityGroup: 
+    Type: "AWS::EC2::SecurityGroup"
+    Properties: 
+      VpcId: 
+        Ref: "VpcId"
+      GroupDescription: "Enable SSH access via port 22"
+      SecurityGroupIngress: 
+        - IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: 
+            Ref: "MyIP"
+        - IpProtocol: "tcp"
+          FromPort: "80"
+          ToPort: "80"
+          CidrIp: "0.0.0.0/0"
+  Ec2Instance: 
+    Type: "AWS::EC2::Instance"
+    Properties:
+      InstanceType: t3.micro
+      KeyName: 
+        Ref: "KeyPair"
+      ImageId:
+        Ref: "ImageId"
+      Tags:
+        - Key: Name
+          Value: Lab-EC2-web-instance
+      UserData:
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install httpd -y
+            systemctl enable httpd
+            systemctl start httpd
+            echo "Hello EPAM. My hostname is $(hostname -f)" > /var/www/html/index.html
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "InstanceSecurityGroup"
+          SubnetId: 
+            Ref: "PublicSubnet" 
+Outputs:
+  InstanceId:
+    Description: InstanceId of the EC2 instance
+    Value: !Ref Ec2Instance
+
+  SiteURL:
+    Description: Site URL
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt [ "Ec2Instance", "PublicIp" ]
+
+
+  PublicIP:
+    Description: Public IP address of the EC2 instance
+    Value: !GetAtt 
+      - Ec2Instance
+      - PublicIp
